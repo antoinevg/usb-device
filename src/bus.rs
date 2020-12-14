@@ -4,6 +4,7 @@ use core::mem;
 use core::ptr;
 use crate::{Result, UsbDirection, UsbError};
 use crate::endpoint::{Endpoint, EndpointDirection, EndpointType, EndpointAddress};
+use crate::endpoint::{IsochronousSynchronizationType, IsochronousUsageType};
 
 /// A trait for device-specific USB peripherals. Implement this to add support for a new hardware
 /// platform.
@@ -240,6 +241,29 @@ impl<B: UsbBus> UsbBusAllocator<B> {
     #[inline]
     pub fn control<D: EndpointDirection>(&self, max_packet_size: u16) -> Endpoint<'_, B, D> {
         self.alloc(None, EndpointType::Control, max_packet_size, 0).expect("alloc_ep failed")
+    }
+
+    /// Allocates an isochronous endpoint.
+    ///
+    /// * `synchronization_type` - Endpoint synchronization type
+    /// * `usage_type` - Endpoint usage type
+    /// * `max_packet_size` - Maximum packet size in bytes. Cannot exceed 64 bytes.
+    ///
+    /// # Panics
+    ///
+    /// Panics if endpoint allocation fails, because running out of endpoints or memory is not
+    /// feasibly recoverable.
+    #[inline]
+    pub fn isochronous<D: EndpointDirection>(
+        &self,
+        synchronization_type: IsochronousSynchronizationType,
+        usage_type: IsochronousUsageType,
+        max_packet_size: u16,
+        interval: u8) -> Endpoint<'_, B, D>
+    {
+        self.alloc(None, EndpointType::Isochronous, max_packet_size, interval)
+            .expect("alloc_ep failed")
+            .configure_ep_type_attributes(synchronization_type as u8 | usage_type as u8)
     }
 
     /// Allocates a bulk endpoint.

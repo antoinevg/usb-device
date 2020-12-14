@@ -38,12 +38,44 @@ pub enum EndpointType {
     /// Control endpoint. Used for device management. Only the host can initiate requests. Usually
     /// used only endpoint 0.
     Control = 0b00,
-    /// Isochronous endpoint. Used for time-critical unreliable data. Not implemented yet.
+    /// Isochronous endpoint. Used for time-critical unreliable data. Not implemented yet. TODO Used  to transfer time-dependent data at a steady rate, such as with audio/video streaming.
     Isochronous = 0b01,
     /// Bulk endpoint. Used for large amounts of best-effort reliable data.
     Bulk = 0b10,
     /// Interrupt endpoint. Used for small amounts of time-critical reliable data.
     Interrupt = 0b11,
+}
+
+/// USB isochronous endpoint synchronization type attributes. The
+/// values of this enum can be directly cast into `u8` to get the
+/// transfer bmAttributes transfer type bits.
+#[repr(u8)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum IsochronousSynchronizationType {
+    /// TODO
+    NoSynchronization = 0b00_00_00,
+    /// TODO
+    Asynchronous = 0b00_01_00,
+    /// TODO
+    Adaptive = 0b00_10_00,
+    /// TODO
+    Synchronous = 0b00_11_00,
+}
+
+/// USB isochronous endpoint usage type attributes. The values of this
+/// enum can be directly cast into `u8` to get the transfer
+/// bmAttributes transfer type bits.
+#[repr(u8)]
+#[derive(Copy, Clone, Eq, PartialEq, Debug)]
+pub enum IsochronousUsageType {
+    /// TODO
+    Data = 0b00_00_00,
+    /// TODO
+    Feedback = 0b01_00_00,
+    /// TODO
+    Implicit = 0b10_00_00,
+    /// TODO
+    Reserved = 0b11_00_00,
 }
 
 /// Handle for a USB endpoint. The endpoint direction is constrained by the `D` type argument, which
@@ -52,6 +84,7 @@ pub struct Endpoint<'a, B: UsbBus, D: EndpointDirection> {
     bus_ptr: &'a AtomicPtr<B>,
     address: EndpointAddress,
     ep_type: EndpointType,
+    ep_type_attributes: u8,
     max_packet_size: u16,
     interval: u8,
     _marker: PhantomData<D>
@@ -69,6 +102,7 @@ impl<B: UsbBus, D: EndpointDirection> Endpoint<'_, B, D> {
             bus_ptr,
             address,
             ep_type,
+            ep_type_attributes: 0,
             max_packet_size,
             interval,
             _marker: PhantomData
@@ -89,6 +123,15 @@ impl<B: UsbBus, D: EndpointDirection> Endpoint<'_, B, D> {
 
     /// Gets the endpoint transfer type.
     pub fn ep_type(&self) -> EndpointType { self.ep_type }
+
+    /// Gets the endpoint transfer type attributes.
+    pub fn ep_type_attributes(&self) -> u8 { self.ep_type_attributes }
+
+    /// Sets the endpoint transfer type attributes.
+    pub fn configure_ep_type_attributes(mut self, ep_type_attributes: u8) -> Self {
+        self.ep_type_attributes = ep_type_attributes;
+        self
+    }
 
     /// Gets the maximum packet size for the endpoint.
     pub fn max_packet_size(&self) -> u16 { self.max_packet_size }
