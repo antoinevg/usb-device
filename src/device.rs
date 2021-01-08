@@ -1,3 +1,14 @@
+//use cortex_m_semihosting::hprintln;
+
+use cortex_m::iprintln;
+macro_rules! loggit {
+    ($($arg:tt)*) => (
+        let itm = unsafe { &mut *cortex_m::peripheral::ITM::ptr() };
+        iprintln!(&mut itm.stim[0], $($arg)*);
+    )
+}
+
+
 use crate::{Result, UsbDirection};
 use crate::bus::{UsbBusAllocator, UsbBus, PollResult, StringIndex};
 use crate::class::{UsbClass, ControlIn, ControlOut};
@@ -309,6 +320,7 @@ impl<B: UsbBus> UsbDevice<'_, B> {
 
                 (Recipient::Interface, Request::GET_INTERFACE) => {
                     // TODO: change when alternate settings are implemented
+                    loggit!("device.rs:323");
                     xfer.accept_with(&DEFAULT_ALTERNATE_SETTING.to_le_bytes()).ok();
                 },
 
@@ -389,6 +401,13 @@ impl<B: UsbBus> UsbDevice<'_, B> {
 
                 (Recipient::Interface, Request::SET_INTERFACE, DEFAULT_ALTERNATE_SETTING_U16) => {
                     // TODO: do something when alternate settings are implemented
+                    loggit!("device.rs:404");
+                    xfer.accept().ok();
+                },
+
+                (Recipient::Interface, Request::SET_INTERFACE, 0x01) => {
+                    // TODO: do something when alternate settings are implemented
+                    loggit!("device.rs:410");
                     xfer.accept().ok();
                 },
 
@@ -436,6 +455,7 @@ impl<B: UsbBus> UsbDevice<'_, B> {
             descriptor_type::CONFIGURATION => accept_writer(xfer, |w| {
                 w.configuration(config)?;
 
+                loggit!("\nclasses -> {}", classes.len());
                 for cls in classes {
                     cls.get_configuration_descriptors(w)?;
                     w.end_class();

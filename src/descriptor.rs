@@ -1,3 +1,18 @@
+#![allow(unused_unsafe)]
+
+//use cortex_m_semihosting::hprintln;
+
+use cortex_m::iprintln;
+macro_rules! loggit {
+    ($($arg:tt)*) => (
+        let itm = unsafe { &mut *cortex_m::peripheral::ITM::ptr() };
+        iprintln!(&mut itm.stim[0], $($arg)*);
+    )
+}
+
+static mut COUNTER: u8 = 0;
+
+
 use crate::{Result, UsbError};
 use crate::bus::{UsbBus, InterfaceNumber};
 use crate::device;
@@ -64,6 +79,7 @@ impl DescriptorWriter<'_> {
         let length = descriptor.len();
 
         if (self.position + 2 + length) > self.buf.len() || (length + 2) > 255 {
+            loggit!("descriptor.rs:82 Buffer overfuckingflowed: {} {}", self.buf.len(), length + 2);
             return Err(UsbError::BufferOverflow);
         }
 
@@ -73,6 +89,18 @@ impl DescriptorWriter<'_> {
         let start = self.position + 2;
 
         self.buf[start..start + length].copy_from_slice(descriptor);
+
+        unsafe {
+            //loggit!("x{:x}\tx{:x}", descriptor_type, descriptor[0]);
+            //loggit!("x{:x} {}", descriptor_type, (length + 2) as u8);
+            loggit!("{}:\t {:02X} {:02X} {:02X?}",
+                    COUNTER,
+                    (length + 2) as u8,
+                    descriptor_type,
+                    descriptor);
+
+            COUNTER += 1;
+        }
 
         self.position = start + length;
 
@@ -197,6 +225,56 @@ impl DescriptorWriter<'_> {
         Ok(())
     }
 
+    /// Writes a interface descriptor with a specific alternate setting.
+    ///
+    /// # Arguments
+    ///
+    /// * `number` - Interface number previously allocated with
+    ///   [`UsbBusAllocator::interface`](crate::bus::UsbBusAllocator::interface).
+    /// * `alternate_setting` - number of the alternate setting
+    /// * `interface_class` - Class code assigned by USB.org. Use `0xff` for vendor-specific devices
+    ///   that do not conform to any class.
+    /// * `interface_sub_class` - Sub-class code. Depends on class.
+    /// * `interface_protocol` - Protocol code. Depends on class and sub-class.
+    pub fn interface_with_alternate_setting(&mut self, number: InterfaceNumber,
+        alternate_setting: u8,
+        num_endpoints: u8,
+        interface_class: u8, interface_sub_class: u8, interface_protocol: u8) -> Result<()>
+    {
+        let num: u8 = number.into();
+        loggit!("interface_with_alternate_setting -> {:x} {:x} {:x} {:x}",
+                num,
+                alternate_setting,
+                num_endpoints,
+                interface_class);
+        if alternate_setting == device::DEFAULT_ALTERNATE_SETTING {
+            match self.num_interfaces_mark {
+                Some(mark) => self.buf[mark] += 1,
+                None => {
+                    loggit!("Fuck");
+                    return Err(UsbError::InvalidState)
+                },
+            };
+        }
+
+        self.num_endpoints_mark = Some(self.position + 4);
+
+        self.write(
+            descriptor_type::INTERFACE,
+            &[
+                number.into(), // bInterfaceNumber
+                alternate_setting, // bAlternateSetting (how to even handle these...)
+                num_endpoints, // bNumEndpoints
+                interface_class, // bInterfaceClass
+                interface_sub_class, // bInterfaceSubClass
+                interface_protocol, // bInterfaceProtocol
+                0, // iInterface
+            ])?;
+        loggit!("interface_with_alternate_setting fin");
+
+        Ok(())
+    }
+
     /// Writes an endpoint descriptor.
     ///
     /// # Arguments
@@ -225,11 +303,42 @@ impl DescriptorWriter<'_> {
         Ok(())
     }
 
+    /// Writes an endpoint descriptor.
+    ///
+    /// # Arguments
+    ///
+    /// * `endpoint` - Endpoint previously allocated with
+    ///   [`UsbBusAllocator`](crate::bus::UsbBusAllocator).
+    pub fn isochronous_endpoint<'e, B: UsbBus, D: EndpointDirection>(&mut self, endpoint: &Endpoint<'e, B, D>)
+        -> Result<()>
+    {
+        match self.num_endpoints_mark {
+            Some(mark) => self.buf[mark] += 1,
+            None => return Err(UsbError::InvalidState),
+        };
+
+        let mps = endpoint.max_packet_size();
+
+        self.write(
+            descriptor_type::ENDPOINT,
+            &[
+                endpoint.address().into(), // bEndpointAddress
+                endpoint.ep_type() as u8 | endpoint.ep_type_attributes(), // bmAttributes
+                mps as u8, (mps >> 8) as u8, // wMaxPacketSize
+                endpoint.interval(), // bInterval
+                0x00, // bRefresh TODO
+                0x00, // bSynchAddress TODO
+            ])?;
+
+        Ok(())
+    }
+
     /// Writes a string descriptor.
     pub(crate) fn string(&mut self, string: &str) -> Result<()> {
         let mut pos = self.position;
 
         if pos + 2 > self.buf.len() {
+            loggit!("descriptor.rs:341 Buffer overfuckingflowed");
             return Err(UsbError::BufferOverflow);
         }
 
@@ -240,6 +349,7 @@ impl DescriptorWriter<'_> {
 
         for c in string.encode_utf16() {
             if pos >= self.buf.len() {
+                loggit!("descriptor.rs:352 Buffer overfuckingflowed");
                 return Err(UsbError::BufferOverflow);
             }
 
@@ -299,6 +409,7 @@ impl<'w, 'a: 'w> BosWriter<'w, 'a> {
         let blen = data.len();
 
         if (start + blen + 3) > self.writer.buf.len() || (blen + 3) > 255 {
+            loggit!("descriptor.rs:412 Buffer overfuckingflowed");
             return Err(UsbError::BufferOverflow);
         }
 
