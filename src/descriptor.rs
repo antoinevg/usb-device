@@ -131,6 +131,9 @@ impl DescriptorWriter<'_> {
 
         self.write_iads = config.composite_with_iads;
 
+        loggit!("configuration -> {:x} -> nim: {}", descriptor_type::CONFIGURATION, self.num_interfaces_mark.unwrap());
+
+
         self.write(
             descriptor_type::CONFIGURATION,
             &[
